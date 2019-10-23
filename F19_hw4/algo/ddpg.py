@@ -22,7 +22,7 @@ class EpsilonNormalActionNoise(object):
 
         Args:
             mu: (float) mean of the noise (probably 0).
-            sigma: (float) std dev of the noise.
+            sigma: (float) std dev x`of the noise.
             epsilon: (float) probability in range [0, 1] with
             which to add noise.
         """
@@ -57,10 +57,15 @@ class DDPG(object):
         state_dim = len(env.observation_space.low)
         np.random.seed(1337)
         self.env = env
-
+        self.outfile = outfile_name
         self.sess = tf.Session()
         tf.keras.backend.set_session(self.sess)
-        raise NotImplementedError
+
+        self.actor = ActorNetwork(self.sess, state_dim, action_dim, BATCH_SIZE, TAU, LEARNING_RATE_ACTOR)
+        self.critic = CriticNetwork(self.sess, state_dim, action_dim, BATCH_SIZE, TAU, LEARNING_RATE_CRITIC)
+        self.replay_buffer = ReplayBuffer(BUFFER_SIZE)
+        self.noise = EpsilonNormalActionNoise(0, 1, 0.05)
+
 
     def evaluate(self, num_episodes):
         """Evaluate the policy. Noise is not added during evaluation.
@@ -130,16 +135,43 @@ class DDPG(object):
             done = False
             step = 0
             loss = 0
-            store_states = []
+            store_states = [state]
             store_actions = []
             while not done:
-                # Collect one episode of experience, saving the states and actions
-                # to store_states and store_actions, respectively.
-                raise NotImplementedError
+                action = self.actor.model.predict(s_t.expand_dims(0))[0]
+                # add noise
+                action = self.noise(action)
+                next_state, reward, done, info = self.env.step(action)
+
+                self.replay_buffer.add(state, action, reward, next_state, done)
+
+                batch = self.replay_buffer.get_batch(BATCH_SIZE)
+
+                zipped_batch = tuple([np.array(list(info)) for info in zip(batch)])
+                states, actions, rewards, next_states, dones = zipped_batch
+
+                target_next_actions = self.actor.model_target.predict(next_states)
+                target_next_q_values = self.critic.model_target.predict([next_states, target_next_actions])
+
+                true_rewards = np.zeros_like(rewards)
+                for j in range(len(batch)):
+                    true_rewards[j] = rewards[j] if dones[j] else rewards[j] + GAMMA * target_next_q_values[j]
+
+                loss += self.critic.model.fit([states, actions], true_rewards, epoch=1)
+                pred_actions = self.actor.model.predict(states)
+                action_gradients = self.critic.gradients(states, pred_actions)
+                self.actor.train(states, action_gradients)
+                self.actor.update_target()
+                self.critic.update_target()
+
+                total_reward += reward
+                store_actions.append(action)
+                state = next_state
+                store_states.append(state)
+                s_t = np.array(state)
 
             if hindsight:
                 # For HER, we also want to save the final next_state.
-                store_states.append(new_s)
                 self.add_hindsight_replay_experience(store_states,
                                                      store_actions)
             del store_states, store_actions
@@ -155,7 +187,6 @@ class DDPG(object):
                 with open(self.outfile, "a") as f:
                     f.write("%.2f, %.2f,\n" % (successes, mean_rewards))
 
-            
     def add_hindsight_replay_experience(self, states, actions):
         """Relabels a trajectory using HER.
 
@@ -163,4 +194,8 @@ class DDPG(object):
             states: a list of states.
             actions: a list of states.
         """
-        raise NotImplementedError
+        her_states, her_rewards = self.env.apply_hindsight(states)
+        states, nextstates = her_states[:-1], her_states[1:]
+        dones = [False for _ in range(len(her_states)-1)] + [True]
+        for args in zip(her_states, actions, her_rewards, nextstates, dones):
+            self.replay_buffer.add(*list(args))
