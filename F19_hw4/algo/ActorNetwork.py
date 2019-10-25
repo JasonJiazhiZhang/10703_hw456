@@ -52,6 +52,7 @@ class ActorNetwork(object):
         self.action_grads = tf.placeholder(tf.float32, shape=(None, action_size))
 
         self.param_grads = tf.gradients(self.model.output, self.model.trainable_weights, -self.action_grads)
+        self.actor_gradients = list(map(lambda x: tf.div(x, self.batch_size), self.param_grads))
         grads = zip(self.param_grads, self.model.trainable_weights)
         self.optimize_actor = tf.train.AdamOptimizer(self.learning_rate).apply_gradients(grads)
 

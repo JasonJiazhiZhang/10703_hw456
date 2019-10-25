@@ -2,8 +2,8 @@ import tensorflow as tf
 from tensorflow.keras.layers import Dense, Input, concatenate
 from tensorflow.keras.optimizers import Adam
 
-HIDDEN1_UNITS = 64
-HIDDEN2_UNITS = 64
+HIDDEN1_UNITS = 256
+HIDDEN2_UNITS = 128
 
 
 def create_critic_network(state_size, action_size, learning_rate):
@@ -20,9 +20,13 @@ def create_critic_network(state_size, action_size, learning_rate):
     """
     state_input = Input(shape=[state_size])
     action_input = Input(shape=[action_size])
+#     cat_input = concatenate([state_input, action_input])
+#     h0 = Dense(HIDDEN1_UNITS, activation='relu', kernel_initializer='he_normal',)(cat_input)
+#     h1 = Dense(HIDDEN2_UNITS, activation='relu', kernel_initializer='he_normal',)(h0)
+
+    h0 = Dense(HIDDEN1_UNITS, activation='relu', kernel_initializer='he_normal',)(state_input)
     cat_input = concatenate([state_input, action_input])
-    h0 = Dense(HIDDEN1_UNITS, activation='relu', kernel_initializer='he_normal',)(cat_input)
-    h1 = Dense(HIDDEN2_UNITS, activation='relu', kernel_initializer='he_normal',)(h0)
+    h1 = Dense(HIDDEN2_UNITS, activation='relu', kernel_initializer='he_normal',)(cat_input)
     value = Dense(1, activation='linear', kernel_initializer='he_normal',)(h1)
     model = tf.keras.Model(inputs=[state_input, action_input], outputs=value)
     model.compile(loss="mse", optimizer=Adam(lr=learning_rate))
@@ -53,6 +57,7 @@ class CriticNetwork(object):
         self.model, self.state_input, self.action_input = create_critic_network(state_size, action_size, learning_rate)
         self.model_target, _, _ = create_critic_network(state_size, action_size, learning_rate)
         self.get_action_gradients = tf.gradients(self.model.output, self.action_input)
+
 
         self.sess.run(tf.initialize_all_variables())
 

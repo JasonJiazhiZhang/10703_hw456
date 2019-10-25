@@ -7,9 +7,9 @@ from .ActorNetwork import ActorNetwork
 from .CriticNetwork import CriticNetwork
 
 BUFFER_SIZE = 1000000
-BATCH_SIZE = 1024
+BATCH_SIZE = 64
 GAMMA = 0.98                    # Discount for rewards.
-TAU = 0.05                      # Target network update rate.
+TAU = 0.001                      # Target network update rate.
 LEARNING_RATE_ACTOR = 0.0001
 LEARNING_RATE_CRITIC = 0.001
 
