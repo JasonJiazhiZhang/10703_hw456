@@ -3,8 +3,8 @@ from tensorflow.keras.layers import Dense, Input
 
 from tensorflow.keras import Model
 
-HIDDEN1_UNITS = 400
-HIDDEN2_UNITS = 400
+HIDDEN1_UNITS = 64
+HIDDEN2_UNITS = 64
 
 
 def create_actor_network(state_size, action_size):
@@ -21,7 +21,7 @@ def create_actor_network(state_size, action_size):
     h0 = Dense(HIDDEN1_UNITS, activation='relu', kernel_initializer='he_normal',)(state_input)
     h1 = Dense(HIDDEN2_UNITS, activation='relu', kernel_initializer='he_normal',)(h0)
     h2 = Dense(action_size, activation='tanh', kernel_initializer='he_normal',)(h1)
-    model = Model(input=state_input, output=h2)
+    model = Model(inputs=state_input, outputs=h2)
     return model, state_input
 
 
@@ -51,8 +51,8 @@ class ActorNetwork(object):
         self.model_target, _ = create_actor_network(state_size, action_size)
         self.action_grads = tf.placeholder(tf.float32, shape=(None, action_size))
 
-        self.param_grads = tf.gradients(self.model.output, self.model.trainnable_weights, self.action_grads)
-        grads = zip(-self.param_grads, self.model.trainnable_weights)
+        self.param_grads = tf.gradients(self.model.output, self.model.trainable_weights, -self.action_grads)
+        grads = zip(self.param_grads, self.model.trainable_weights)
         self.optimize_actor = tf.train.AdamOptimizer(self.learning_rate).apply_gradients(grads)
 
 

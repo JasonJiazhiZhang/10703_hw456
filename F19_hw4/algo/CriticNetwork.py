@@ -1,9 +1,9 @@
 import tensorflow as tf
-from tensorflow.keras.layers import Dense, Input, Concatenate
+from tensorflow.keras.layers import Dense, Input, concatenate
 from tensorflow.keras.optimizers import Adam
 
-HIDDEN1_UNITS = 400
-HIDDEN2_UNITS = 400
+HIDDEN1_UNITS = 64
+HIDDEN2_UNITS = 64
 
 
 def create_critic_network(state_size, action_size, learning_rate):
@@ -20,7 +20,7 @@ def create_critic_network(state_size, action_size, learning_rate):
     """
     state_input = Input(shape=[state_size])
     action_input = Input(shape=[action_size])
-    cat_input = Concatenate(state_input, action_input)
+    cat_input = concatenate([state_input, action_input])
     h0 = Dense(HIDDEN1_UNITS, activation='relu', kernel_initializer='he_normal',)(cat_input)
     h1 = Dense(HIDDEN2_UNITS, activation='relu', kernel_initializer='he_normal',)(h0)
     value = Dense(1, activation='linear', kernel_initializer='he_normal',)(h1)

@@ -40,7 +40,7 @@ class EpsilonNormalActionNoise(object):
         if np.random.uniform() > self.epsilon:
             return action + np.random.normal(self.mu, self.sigma)
         else:
-            return np.random.uniform(-1.0, 1.0, size=action.shape)
+            return np.random.uniform(-1.0, +1.0, size=action.shape)
 
 
 class DDPG(object):
@@ -64,7 +64,7 @@ class DDPG(object):
         self.actor = ActorNetwork(self.sess, state_dim, action_dim, BATCH_SIZE, TAU, LEARNING_RATE_ACTOR)
         self.critic = CriticNetwork(self.sess, state_dim, action_dim, BATCH_SIZE, TAU, LEARNING_RATE_CRITIC)
         self.replay_buffer = ReplayBuffer(BUFFER_SIZE)
-        self.noise = EpsilonNormalActionNoise(0, 1, 0.05)
+        self.noise = EpsilonNormalActionNoise(0, 0.1, 0.05)
 
 
     def evaluate(self, num_episodes):
@@ -117,7 +117,7 @@ class DDPG(object):
                     plt.legend(loc='lower left', fontsize=28, ncol=3, bbox_to_anchor=(0.1, 1.0))
                 if i == 8:
                     # Comment out the line below to disable plotting.
-                    plt.show()
+                    plt.savefig("figures/figure.png")
         return np.mean(success_vec), np.mean(test_rewards)
 
     def train(self, num_episodes, hindsight=False):
@@ -138,18 +138,23 @@ class DDPG(object):
             store_states = [state]
             store_actions = []
             while not done:
-                action = self.actor.model.predict(s_t.expand_dims(0))[0]
+                action = self.actor.model.predict(np.expand_dims(s_t, 0))[0]
                 # add noise
-                action = self.noise(action)
+                action += self.noise(action)
                 next_state, reward, done, info = self.env.step(action)
 
                 self.replay_buffer.add(state, action, reward, next_state, done)
 
                 batch = self.replay_buffer.get_batch(BATCH_SIZE)
-
-                zipped_batch = tuple([np.array(list(info)) for info in zip(batch)])
-                states, actions, rewards, next_states, dones = zipped_batch
-
+                batch_size = len(batch)
+                
+                states = np.array([line[0] for line in batch]).reshape(batch_size, -1)
+                actions = np.array([line[1] for line in batch]).reshape(batch_size, -1)
+                rewards = np.array([line[2] for line in batch]).reshape(batch_size, -1)
+                next_states = np.array([line[3] for line in batch]).reshape(batch_size, -1)
+                dones = np.array([line[4] for line in batch]).reshape(batch_size, -1)
+#                 states, actions, rewards, next_states, dones = zipped_batch
+#                 print(next_states)
                 target_next_actions = self.actor.model_target.predict(next_states)
                 target_next_q_values = self.critic.model_target.predict([next_states, target_next_actions])
 
@@ -157,9 +162,13 @@ class DDPG(object):
                 for j in range(len(batch)):
                     true_rewards[j] = rewards[j] if dones[j] else rewards[j] + GAMMA * target_next_q_values[j]
 
-                loss += self.critic.model.fit([states, actions], true_rewards, epoch=1)
+                history = self.critic.model.fit([states, actions], true_rewards, verbose=0, epochs=1)
+                loss += sum(history.history['loss'])
+#                 current_loss = self.critic.model.fit([states, actions], true_rewards, 1)
+#                 print(current_loss)
+#                 loss += current_loss
                 pred_actions = self.actor.model.predict(states)
-                action_gradients = self.critic.gradients(states, pred_actions)
+                action_gradients = np.array(self.critic.gradients(states, pred_actions)).reshape(batch_size, -1)
                 self.actor.train(states, action_gradients)
                 self.actor.update_target()
                 self.critic.update_target()
@@ -169,6 +178,7 @@ class DDPG(object):
                 state = next_state
                 store_states.append(state)
                 s_t = np.array(state)
+                step += 1
 
             if hindsight:
                 # For HER, we also want to save the final next_state.
@@ -178,10 +188,11 @@ class DDPG(object):
             store_states, store_actions = [], []
 
             # Logging
+        
             print("Episode %d: Total reward = %d" % (i, total_reward))
             print("\tTD loss = %.2f" % (loss / step,))
             print("\tSteps = %d; Info = %s" % (step, info['done']))
-            if i % 100 == 0:
+            if i % 5 == 0:
                 successes, mean_rewards = self.evaluate(10)
                 print('Evaluation: success = %.2f; return = %.2f' % (successes, mean_rewards))
                 with open(self.outfile, "a") as f:
