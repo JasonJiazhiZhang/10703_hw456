@@ -140,7 +140,7 @@ class DDPG(object):
             while not done:
                 action = self.actor.model.predict(np.expand_dims(s_t, 0))[0]
                 # add noise
-                action += self.noise(action)
+                action = self.noise(action)
                 next_state, reward, done, info = self.env.step(action)
 
                 self.replay_buffer.add(state, action, reward, next_state, done)
