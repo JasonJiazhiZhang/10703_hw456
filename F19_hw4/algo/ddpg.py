@@ -1,15 +1,16 @@
 import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
-
+import datetime
+import copy
 from .ReplayBuffer import ReplayBuffer
 from .ActorNetwork import ActorNetwork
 from .CriticNetwork import CriticNetwork
 
 BUFFER_SIZE = 1000000
-BATCH_SIZE = 64
+BATCH_SIZE = 128
 GAMMA = 0.98                    # Discount for rewards.
-TAU = 0.001                      # Target network update rate.
+TAU = 0.05                      # Target network update rate.
 LEARNING_RATE_ACTOR = 0.0001
 LEARNING_RATE_CRITIC = 0.001
 
@@ -40,7 +41,7 @@ class EpsilonNormalActionNoise(object):
         if np.random.uniform() > self.epsilon:
             return action + np.random.normal(self.mu, self.sigma)
         else:
-            return np.random.uniform(-1.0, +1.0, size=action.shape)
+            return np.random.uniform(-1.0, 1.0, size=action.shape)
 
 
 class DDPG(object):
@@ -64,10 +65,9 @@ class DDPG(object):
         self.actor = ActorNetwork(self.sess, state_dim, action_dim, BATCH_SIZE, TAU, LEARNING_RATE_ACTOR)
         self.critic = CriticNetwork(self.sess, state_dim, action_dim, BATCH_SIZE, TAU, LEARNING_RATE_CRITIC)
         self.replay_buffer = ReplayBuffer(BUFFER_SIZE)
-        self.noise = EpsilonNormalActionNoise(0, 0.1, 0.05)
+        self.noise = EpsilonNormalActionNoise(0, 0.01, 0.2)
 
-
-    def evaluate(self, num_episodes):
+    def evaluate(self, num_episodes, if_save=True, ):
         """Evaluate the policy. Noise is not added during evaluation.
 
         Args:
@@ -99,26 +99,31 @@ class DDPG(object):
                 step += 1
             success_vec.append(success)
             test_rewards.append(total_reward)
-            if i < 9:
-                plt.subplot(3, 3, i+1)
-                s_vec = np.array(s_vec)
-                pusher_vec = s_vec[:, :2]
-                puck_vec = s_vec[:, 2:4]
-                goal_vec = s_vec[:, 4:]
-                plt.plot(pusher_vec[:, 0], pusher_vec[:, 1], '-o', label='pusher')
-                plt.plot(puck_vec[:, 0], puck_vec[:, 1], '-o', label='puck')
-                plt.plot(goal_vec[:, 0], goal_vec[:, 1], '*', label='goal', markersize=10)
-                plt.plot([0, 5, 5, 0, 0], [0, 0, 5, 5, 0], 'k-', linewidth=3)
-                plt.fill_between([-1, 6], [-1, -1], [6, 6], alpha=0.1,
-                                 color='g' if success else 'r')
-                plt.xlim([-1, 6])
-                plt.ylim([-1, 6])
-                if i == 0:
-                    plt.legend(loc='lower left', fontsize=28, ncol=3, bbox_to_anchor=(0.1, 1.0))
-                if i == 8:
-                    # Comment out the line below to disable plotting.
-                    plt.savefig("figures/figure.png")
-        return np.mean(success_vec), np.mean(test_rewards)
+#             if i < 9:
+#                 plt.subplot(3, 3, i+1)
+#                 s_vec = np.array(s_vec)
+#                 pusher_vec = s_vec[:, :2]
+#                 puck_vec = s_vec[:, 2:4]
+#                 goal_vec = s_vec[:, 4:]
+#                 plt.plot(pusher_vec[:, 0], pusher_vec[:, 1], '-o', label='pusher')
+#                 plt.plot(puck_vec[:, 0], puck_vec[:, 1], '-o', label='puck')
+#                 plt.plot(goal_vec[:, 0], goal_vec[:, 1], '*', label='goal', markersize=10)
+#                 plt.plot([0, 5, 5, 0, 0], [0, 0, 5, 5, 0], 'k-', linewidth=3)
+#                 plt.fill_between([-1, 6], [-1, -1], [6, 6], alpha=0.1,
+#                                  color='g' if success else 'r')
+#                 plt.xlim([-1, 6])
+#                 plt.ylim([-1, 6])
+#                 if i == 0:
+#                     plt.legend(loc='lower left', fontsize=28, ncol=3, bbox_to_anchor=(0.1, 1.0))
+#                 if i == 8:
+#                     # Comment out the line below to disable plotting.
+#                     if if_save:
+#                         time_now = datetime.datetime.now()
+#                         figure_str = "figures_her/plot_" + str(time_now.hour) + "_" + str(time_now.minute) + ".png"
+                        
+#                         plt.savefig(figure_str)
+#                     plt.clf()
+        return np.mean(success_vec), np.mean(test_rewards), np.std(test_rewards)
 
     def train(self, num_episodes, hindsight=False):
         """Runs the DDPG algorithm.
@@ -127,7 +132,9 @@ class DDPG(object):
             num_episodes: (int) Number of training episodes.
             hindsight: (bool) Whether to use HER.
         """
-
+        train_rewards = []
+        test_success_rate = []
+        test_avg_rewards = []
         for i in range(num_episodes):
             state = self.env.reset()
             s_t = np.array(state)
@@ -141,9 +148,9 @@ class DDPG(object):
                 action = self.actor.model.predict(np.expand_dims(s_t, 0))[0]
                 # add noise
                 action = self.noise(action)
-                next_state, reward, done, info = self.env.step(action)
-
+                next_state, reward, done, info = self.env.step(action)        
                 self.replay_buffer.add(state, action, reward, next_state, done)
+                state = next_state
 
                 batch = self.replay_buffer.get_batch(BATCH_SIZE)
                 batch_size = len(batch)
@@ -152,9 +159,8 @@ class DDPG(object):
                 actions = np.array([line[1] for line in batch]).reshape(batch_size, -1)
                 rewards = np.array([line[2] for line in batch]).reshape(batch_size, -1)
                 next_states = np.array([line[3] for line in batch]).reshape(batch_size, -1)
+                
                 dones = np.array([line[4] for line in batch]).reshape(batch_size, -1)
-#                 states, actions, rewards, next_states, dones = zipped_batch
-#                 print(next_states)
                 target_next_actions = self.actor.model_target.predict(next_states)
                 target_next_q_values = self.critic.model_target.predict([next_states, target_next_actions])
 
@@ -162,11 +168,8 @@ class DDPG(object):
                 for j in range(len(batch)):
                     true_rewards[j] = rewards[j] if dones[j] else rewards[j] + GAMMA * target_next_q_values[j]
 
-                history = self.critic.model.fit([states, actions], true_rewards, verbose=0, epochs=1)
-                loss += sum(history.history['loss'])
-#                 current_loss = self.critic.model.fit([states, actions], true_rewards, 1)
-#                 print(current_loss)
-#                 loss += current_loss
+                history = self.critic.model.fit([states, actions], true_rewards, verbose=0)
+                loss += np.mean(history.history['loss'])
                 pred_actions = self.actor.model.predict(states)
                 action_gradients = np.array(self.critic.gradients(states, pred_actions)).reshape(batch_size, -1)
                 self.actor.train(states, action_gradients)
@@ -175,7 +178,6 @@ class DDPG(object):
 
                 total_reward += reward
                 store_actions.append(action)
-                state = next_state
                 store_states.append(state)
                 s_t = np.array(state)
                 step += 1
@@ -186,27 +188,36 @@ class DDPG(object):
                                                      store_actions)
             del store_states, store_actions
             store_states, store_actions = [], []
-
+            train_rewards.append(total_reward)
             # Logging
-        
-            print("Episode %d: Total reward = %d" % (i, total_reward))
-            print("\tTD loss = %.2f" % (loss / step,))
-            print("\tSteps = %d; Info = %s" % (step, info['done']))
-            if i % 5 == 0:
-                successes, mean_rewards = self.evaluate(10)
-                print('Evaluation: success = %.2f; return = %.2f' % (successes, mean_rewards))
+#            
+            print("Episode %d: Total reward = %d, TD loss = %.2f, Steps = %d; Info = %s, " % (i, total_reward,loss / step, step, info['done']))
+            if i % 100 == 0:
+                is_save = True if i % 1000 == 0 else False
+                successes, mean_rewards, std_rewards = self.evaluate(100, is_save)
+                print('Evaluation: success = %.2f; return = %.2f, std = %.2f' % (successes, mean_rewards, std_rewards))
+                test_success_rate.append(successes)
+                test_avg_rewards.append([mean_rewards, std_rewards])
                 with open(self.outfile, "a") as f:
-                    f.write("%.2f, %.2f,\n" % (successes, mean_rewards))
+                    f.write("%.2f, %.2f, %.2f \n" % (successes, mean_rewards, std_rewards))
+        base = "her_" if hindsight else ""
+        np.save(base + 'train_rewards.npy', np.array(train_rewards))
+        np.save(base + 'test_success_rate.npy', np.array(test_success_rate))
+        np.save(base + 'test_avg_rewards.npy', np.array(test_avg_rewards))
+                    
 
-    def add_hindsight_replay_experience(self, states, actions):
+    def add_hindsight_replay_experience(self, c_states, c_actions):
         """Relabels a trajectory using HER.
 
         Args:
             states: a list of states.
             actions: a list of states.
         """
+        states = copy.deepcopy(c_states)
+        actions = copy.deepcopy(c_actions)
         her_states, her_rewards = self.env.apply_hindsight(states)
         states, nextstates = her_states[:-1], her_states[1:]
-        dones = [False for _ in range(len(her_states)-1)] + [True]
-        for args in zip(her_states, actions, her_rewards, nextstates, dones):
-            self.replay_buffer.add(*list(args))
+        dones = [False for _ in range(len(actions)-1)] + [True]    
+        for i in range(len(actions)):
+            state, action, reward, next_state,done = states[i],actions[i],her_rewards[i],nextstates[i],dones[i]
+            self.replay_buffer.add(state, action, reward, next_state,done)

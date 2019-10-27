@@ -1,11 +1,9 @@
 import tensorflow as tf
 from tensorflow.keras.layers import Dense, Input
-
 from tensorflow.keras import Model
 
-HIDDEN1_UNITS = 64
-HIDDEN2_UNITS = 64
-
+HIDDEN1_UNITS = 400
+HIDDEN2_UNITS = 400
 
 def create_actor_network(state_size, action_size):
     """Creates an actor network.
@@ -18,9 +16,9 @@ def create_actor_network(state_size, action_size):
         state_input: a tf.placeholder for the batched state.
     """
     state_input = Input(shape=[state_size])
-    h0 = Dense(HIDDEN1_UNITS, activation='relu', kernel_initializer='he_normal',)(state_input)
-    h1 = Dense(HIDDEN2_UNITS, activation='relu', kernel_initializer='he_normal',)(h0)
-    h2 = Dense(action_size, activation='tanh', kernel_initializer='he_normal',)(h1)
+    h0 = Dense(HIDDEN1_UNITS, activation='relu')(state_input)
+    h1 = Dense(HIDDEN2_UNITS, activation='relu')(h0)
+    h2 = Dense(action_size, activation='tanh')(h1)
     model = Model(inputs=state_input, outputs=h2)
     return model, state_input
 
@@ -46,16 +44,15 @@ class ActorNetwork(object):
         self.batch_size = batch_size
         self.tau = tau
         self.learning_rate = learning_rate
+        tf.keras.backend.set_session(self.sess)
 
         self.model, self.states = create_actor_network(state_size, action_size)
         self.model_target, _ = create_actor_network(state_size, action_size)
-        self.action_grads = tf.placeholder(tf.float32, shape=(None, action_size))
-
+        
+        self.action_grads = tf.placeholder(tf.float32, shape=[None, action_size])
         self.param_grads = tf.gradients(self.model.output, self.model.trainable_weights, -self.action_grads)
-        self.actor_gradients = list(map(lambda x: tf.div(x, self.batch_size), self.param_grads))
         grads = zip(self.param_grads, self.model.trainable_weights)
         self.optimize_actor = tf.train.AdamOptimizer(self.learning_rate).apply_gradients(grads)
-
 
         self.sess.run(tf.initialize_all_variables())
 
