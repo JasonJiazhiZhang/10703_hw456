@@ -51,8 +51,6 @@ class MPC:
         self.std_x = 0.5 * np.ones(self.plan_horizon)
         self.std_y = 0.5 * np.ones(self.plan_horizon)
 
-        self.cem_actions = np.zeros(self.plan_horizon, self.action_dim)
-
         # TODO: write your code here
         # Initialize your planner with the relevant arguments.
         # Write different optimizers for cem and random actions respectively
@@ -133,16 +131,18 @@ class MPC:
         for i in range(self.max_iters):
             action_sample_x = np.random.normal(self.mean_x, self.std_x, (self.popsize, self.plan_horizon))
             action_sample_y = np.random.normal(self.mean_y, self.std_y, (self.popsize, self.plan_horizon))
-
-            states = np.tile(state, (self.popsize, 1))
+            self.goal = state[-2:]
+            state_without_goal = copy.deepcopy(state)
+            state_without_goal = state_without_goal[:-2]
+            states = np.tile(state_without_goal, (self.popsize, 1))
             num_state = states.shape[0]
-            actions = np.column_stack((action_sample_x, action_sample_y))
-
+#             actions = np.column_stack((action_sample_x, action_sample_y))
             cost = np.zeros(num_state)
             for t in range(self.plan_horizon):
+                actions = np.column_stack((action_sample_x[:, t], action_sample_y[:, t]))
                 next_states = self.predict_next_state(states, actions) # popsize * plan_horizon
                 for j in range(num_state):
-                    cost[j] += self.obs_cost_fn(next_states[i, :])
+                    cost[j] += self.obs_cost_fn(next_states[j, :])
                 states = next_states
 
             top_index = np.argsort(cost)[:self.num_elites]
@@ -150,6 +150,8 @@ class MPC:
             top_action_y = action_sample_y[top_index, :]
             self.mean_x = np.mean(top_action_x, axis=0)
             self.mean_y = np.mean(top_action_y, axis=0)
+#             print(self.mean_x)
+#             print(self.mean_y)
             self.std_x = np.std(top_action_x, axis=0)
             self.std_y = np.std(top_action_y, axis=0)
 
