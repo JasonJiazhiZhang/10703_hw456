@@ -122,13 +122,17 @@ class MPC:
           state: current state
           t: current timestep
         """
+        if self.use_random_optimizer:
+            self.reset()
+            
         if not self.use_mpc and t % self.plan_horizon != 0:
             action = self.cem_actions[t % self.plan_horizon, :]
             if t + 1 % self.plan_horizon == 0:
                 self.reset_std()
             return action
 
-        for i in range(self.max_iters):
+        iters = self.max_iters if not self.use_random_optimizer else 1
+        for i in range(iters):
             action_sample_x = np.random.normal(self.mean_x, self.std_x, (self.popsize, self.plan_horizon))
             action_sample_y = np.random.normal(self.mean_y, self.std_y, (self.popsize, self.plan_horizon))
             self.goal = state[-2:]
@@ -136,7 +140,6 @@ class MPC:
             state_without_goal = state_without_goal[:-2]
             states = np.tile(state_without_goal, (self.popsize, 1))
             num_state = states.shape[0]
-#             actions = np.column_stack((action_sample_x, action_sample_y))
             cost = np.zeros(num_state)
             for t in range(self.plan_horizon):
                 actions = np.column_stack((action_sample_x[:, t], action_sample_y[:, t]))
@@ -144,21 +147,28 @@ class MPC:
                 for j in range(num_state):
                     cost[j] += self.obs_cost_fn(next_states[j, :])
                 states = next_states
-
-            top_index = np.argsort(cost)[:self.num_elites]
-            top_action_x = action_sample_x[top_index, :]
-            top_action_y = action_sample_y[top_index, :]
-            self.mean_x = np.mean(top_action_x, axis=0)
-            self.mean_y = np.mean(top_action_y, axis=0)
-#             print(self.mean_x)
-#             print(self.mean_y)
-            self.std_x = np.std(top_action_x, axis=0)
-            self.std_y = np.std(top_action_y, axis=0)
+            
+            if self.use_random_optimizer:
+                top_index = np.argsort(cost)[0]
+                self.mean_x = action_sample_x[top_index, :]
+                self.mean_y = action_sample_y[top_index, :]
+            else:
+                top_index = np.argsort(cost)[:self.num_elites]
+                top_action_x = action_sample_x[top_index, :]
+                top_action_y = action_sample_y[top_index, :]
+                self.mean_x = np.mean(top_action_x, axis=0)
+                self.mean_y = np.mean(top_action_y, axis=0)
+                self.std_x = np.std(top_action_x, axis=0)
+                self.std_y = np.std(top_action_y, axis=0)
 
         if not self.use_mpc:
             self.cem_actions = np.column_stack((self.mean_x, self.mean_y))
             action = self.cem_actions[0, :]
-
+        else:
+            action = np.array((self.mean_x[0], self.mean_y[0]))
+            self.mean_x = np.append(self.mean_x[1:], 0)
+            self.mean_y = np.append(self.mean_y[1:], 0)
+            self.reset_std()
         return action
 
 

@@ -49,6 +49,8 @@ class ExperimentGTDynamics(object):
                     self.task_horizon, self.cem_policy if optimizer == 'cem' else self.random_policy
                 )
             )
+            print('CEM PushingEnv: reward_sum: {}'.format(samples[-1]["reward_sum"]))
+
         avg_return = np.mean([sample["reward_sum"] for sample in samples])
         avg_success = np.mean([sample["rewards"][-1] == 0 for sample in samples])
         return avg_return, avg_success
@@ -126,30 +128,36 @@ class ExperimentModelDynamics:
 
 
 def test_cem_gt_dynamics(num_episode=10):
+#     mpc_params = {'use_mpc': False, 'num_particles': 1}
+#     exp = ExperimentGTDynamics(env_name='Pushing2D-v1', mpc_params=mpc_params)
+#     avg_reward, avg_success = exp.test(num_episode)
+#     print('CEM PushingEnv: avg_reward: {}, avg_success: {}'.format(avg_reward, avg_success))
+    
+#     mpc_params = {'use_mpc': False, 'num_particles': 1}
+#     exp = ExperimentGTDynamics(env_name='Pushing2D-v1', mpc_params=mpc_params)
+#     avg_reward, avg_success = exp.test(num_episode, optimizer='random')
+#     print('MPC PushingEnv: avg_reward: {}, avg_success: {}'.format(avg_reward, avg_success))
+    
+    #0.94
+    mpc_params = {'use_mpc': True, 'num_particles': 1}
+    exp = ExperimentGTDynamics(env_name='Pushing2D-v1', mpc_params=mpc_params)
+    avg_reward, avg_success = exp.test(num_episode)
+    print('MPC PushingEnv: avg_reward: {}, avg_success: {}'.format(avg_reward, avg_success))
+    #0.42
+    mpc_params = {'use_mpc': False, 'num_particles': 1}
+    exp = ExperimentGTDynamics(env_name='Pushing2DNoisyControl-v1', mpc_params=mpc_params)
+    avg_reward, avg_success = exp.test(num_episode)
+    print('CEM PushingEnv Noisy: avg_reward: {}, avg_success: {}'.format(avg_reward, avg_success))
+    #0.78
+    mpc_params = {'use_mpc': True, 'num_particles': 1}
+    exp = ExperimentGTDynamics(env_name='Pushing2DNoisyControl-v1', mpc_params=mpc_params)
+    avg_reward, avg_success = exp.test(num_episode)
+    print('MPC PushingEnv Noisy: avg_reward: {}, avg_success: {}'.format(avg_reward, avg_success))
+    #0.7
     mpc_params = {'use_mpc': False, 'num_particles': 1}
     exp = ExperimentGTDynamics(env_name='Pushing2D-v1', mpc_params=mpc_params)
     avg_reward, avg_success = exp.test(num_episode)
-    print('CEM PushingEnv: avg_reward: {}, avg_success: {}'.format(avg_reward, avg_success))
-    #
-    # mpc_params = {'use_mpc': True, 'num_particles': 1}
-    # exp = ExperimentGTDynamics(env_name='Pushing2D-v1', mpc_params=mpc_params)
-    # avg_reward, avg_success = exp.test(num_episode)
-    # print('MPC PushingEnv: avg_reward: {}, avg_success: {}'.format(avg_reward, avg_success))
-    #
-    # mpc_params = {'use_mpc': False, 'num_particles': 1}
-    # exp = ExperimentGTDynamics(env_name='Pushing2DNoisyControl-v1', mpc_params=mpc_params)
-    # avg_reward, avg_success = exp.test(num_episode)
-    # print('CEM PushingEnv Noisy: avg_reward: {}, avg_success: {}'.format(avg_reward, avg_success))
-    #
-    # mpc_params = {'use_mpc': True, 'num_particles': 1}
-    # exp = ExperimentGTDynamics(env_name='Pushing2DNoisyControl-v1', mpc_params=mpc_params)
-    # avg_reward, avg_success = exp.test(num_episode)
-    # print('MPC PushingEnv Noisy: avg_reward: {}, avg_success: {}'.format(avg_reward, avg_success))
-
-    # mpc_params = {'use_mpc': False, 'num_particles': 1}
-    # exp = ExperimentGTDynamics(env_name='Pushing2D-v1', mpc_params=mpc_params)
-    # avg_reward, avg_success = exp.test(num_episode, optimizer='random)
-    # print('MPC PushingEnv Noisy: avg_reward: {}, avg_success: {}'.format(avg_reward, avg_success))
+    print('MPC PushingEnv Noisy: avg_reward: {}, avg_success: {}'.format(avg_reward, avg_success))
 
     # mpc_params = {'use_mpc': True, 'num_particles': 1}
     # exp = ExperimentGTDynamics(env_name='Pushing2D-v1', mpc_params=mpc_params)
