@@ -23,7 +23,6 @@ class PENN:
         :param action_dim: action dimension
         :param learning_rate:
         """
-
         self.sess = tf.Session()
         self.num_nets = num_nets
         self.state_dim = state_dim
@@ -99,13 +98,16 @@ class PENN:
           targets: resulting states
         """
         # TODO: write your code here
+        losses = []
+        rmses = []
         for i in range(self.num_nets):
-            self.sess.run(
+            _, loss, rmse = self.sess.run(
                 [self.optimizers[i],
                 self.losses, self.rmses],
                 feed_dict={
-                    true_state: targets,
-                    self.I, inputs
+                    true_state: targets[i],
+                    self.I, inputs[i]
                 }
             )
+        return losses, rmses
     # TODO: Write any helper functions that you need

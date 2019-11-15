@@ -85,8 +85,11 @@ class MPC:
          new_states = np.zeros_like(states)
         for i in range(states.shape[0]):
             inputs = np.column_stack((states[i,:], actions[i,:]))
-            out_mean, out_logvar = self.sess.run([self.model.out_mean, self.model.out_logvar], feed_dict={self.model.inputs: inputs})
-            new_state = np.random.normal(out_mean, np.exp(out_logvar))
+            out_means, out_logvars = self.sess.run([self.model.predict_means, self.model.logvars], feed_dict={self.model.inputs: inputs})
+            index = np.random.randint(self.num_nets)
+            mean = out_means[index]
+            logvar = out_logvars[index]
+            new_state = np.random.normal(mean, np.sqrt(np.exp(logvar)))
             new_states[i, :] = new_state
                                                 
         return new_states
@@ -143,7 +146,6 @@ class MPC:
         print('Loss: {}, RMSE: {}'.format(np.mean(losses), np.mean(rmses)))
 
                 
-
     def reset_std(self):
         self.std_x = 0.5 * np.ones(self.plan_horizon)
         self.std_y = 0.5 * np.ones(self.plan_horizon)
