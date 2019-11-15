@@ -29,13 +29,36 @@ class PENN:
         self.state_dim = state_dim
         self.action_dim = action_dim
         K.set_session(self.sess)
-
+        self.learning_rate = learning_rate
+        self.models = []
+        self.optimizers = []
+        self.predict_means = []
+        self.logvars = []
+        self.losses = []
+        self.rmses = []
         # Log variance bounds
         self.max_logvar = tf.Variable(-3 * np.ones([1, self.state_dim]), dtype=tf.float32)
         self.min_logvar = tf.Variable(-7 * np.ones([1, self.state_dim]), dtype=tf.float32)
 
         # TODO write your code here
         # Create and initialize your model
+        for i in range(self.num_nets):
+            model, self.I = create_network()
+            self.models.append(model)
+            out_mean, out_logvar = self.get_output(model.output)
+            self.predict_means.append(out_mean)
+            self.logvars.append(out_logvar)
+            true_state = tf.placeholder(tf.float32, shape=[None, self.state_dim])
+            loss, rmse = self.compile_loss(true_state, out_mean, out_logvar)
+            self.losses.append(loss)
+            self.rmses.append(rmse)
+            
+            gradients = tf.gradients(loss, model.trainable_weights)
+            optimizer = tf.train.AdamOptimizer(self.learning_rate).apply(zip(gradients, model.trainable_weights))
+            self.optimizers.append(optimizer)
+        
+        self.sess.run(tf.initialize_all_variables())
+   
 
     def get_output(self, output):
         """
@@ -59,8 +82,16 @@ class PENN:
         h3 = Dense(HIDDEN3_UNITS, activation='relu', kernel_regularizer=l2(0.0001))(h2)
         O = Dense(2 * self.state_dim, activation='linear', kernel_regularizer=l2(0.0001))(h3)
         model = Model(input=I, output=O)
-        return model
+        return model, I 
 
+    def compile_loss(self, true_state, out_mean, out_logvar):
+        inv_var = tf.exp(-out_logvar)
+        diff = out_mean - true_state
+        mse_loss = tf.reduce_mean(tf.reduce_mean(tf.square(diff) * inv_var, axis=-1), axis=-1)
+        var_loss = tf.reduce_mean(tf.reduce_mean(out_logvar, axis=-1), axis=-1)
+        rmse = tf.sqrt(tf.reduce_mean(tf.square(diff)))
+        return mse_loss + var_loss, rmse
+        
     def train(self, inputs, targets, batch_size=128, epochs=5):
         """
         Arguments:
@@ -68,6 +99,13 @@ class PENN:
           targets: resulting states
         """
         # TODO: write your code here
-        raise NotImplementedError
-
+        for i in range(self.num_nets):
+            self.sess.run(
+                [self.optimizers[i],
+                self.losses, self.rmses],
+                feed_dict={
+                    true_state: targets,
+                    self.I, inputs
+                }
+            )
     # TODO: Write any helper functions that you need

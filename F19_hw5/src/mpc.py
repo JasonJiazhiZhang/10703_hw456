@@ -50,6 +50,10 @@ class MPC:
         self.mean_y = np.zeros(self.plan_horizon)
         self.std_x = 0.5 * np.ones(self.plan_horizon)
         self.std_y = 0.5 * np.ones(self.plan_horizon)
+        
+        self.train_states = []
+        self.train_actions = []
+        self.train_next_states = []
 
         # TODO: write your code here
         # Initialize your planner with the relevant arguments.
@@ -78,7 +82,15 @@ class MPC:
     def predict_next_state_model(self, states, actions):
         """ Given a list of state action pairs, use the learned model to predict the next state"""
         # TODO: write your code here
-        raise NotImplementedError
+         new_states = np.zeros_like(states)
+        for i in range(states.shape[0]):
+            inputs = np.column_stack((states[i,:], actions[i,:]))
+            out_mean, out_logvar = self.sess.run([self.model.out_mean, self.model.out_logvar], feed_dict={self.model.inputs: inputs})
+            new_state = np.random.normal(out_mean, np.exp(out_logvar))
+            new_states[i, :] = new_state
+                                                
+        return new_states
+
 
     def predict_next_state_gt(self, states, actions):
         """ Given a list of state action pairs, use the ground truth dynamics to predict the next state"""
@@ -98,7 +110,39 @@ class MPC:
           epochs: number of epochs to train for
         """
         # TODO: write your code here
-        raise NotImplementedError
+        batch_size = 128
+        for i in range(len(obs_trajs)):
+            self.train_states.append(obs_trajs[i][:-1, :-2])
+            self.train_actions.append(acs_trajs[i])
+            self.train_next_states.append(obs_trajs[i][1:, :-2])
+        
+        train_inputs = []
+        train_targets = []
+        for i in range(self.num_nets):
+            index = np.random.permutation(len(self.train_states))
+            states = self.train_states[index,:]
+            actions = self.train_actions[index,:]
+            targets = self.train_next_states[index,:]
+            inputs = np.column_stack((states, actions))
+            train_inputs.append(inputs)
+            train_targets.append(targets)
+        losses = []
+        rmses = []
+        for i in epochs:
+            index = np.random.permutation(len(self.train_states))
+            for batch_id in range(0, len(self.train_states), batch_size):
+                batch_index = index[batch_id * batch_size: min((batch_id + 1) * batch_size, len(self.train_states))]
+                model_inputs = []
+                model_targets = []
+                for inputs, targets in zip(train_inputs, train_targets):
+                    model_inputs.append(inputs[batch_index, :])
+                    model_targets.append(targets[batch_index, :])
+                loss, rmse = self.model.train(model_inputs, model_targets)
+                losses.append(np.mean(loss))
+                rmses.append(np.mean(rmse))
+        print('Loss: {}, RMSE: {}'.format(np.mean(losses), np.mean(rmses)))
+
+                
 
     def reset_std(self):
         self.std_x = 0.5 * np.ones(self.plan_horizon)
