@@ -177,14 +177,15 @@ class MPC:
 
         iters = self.max_iters if not self.use_random_optimizer else 1
         for i in range(iters):
-            action_sample_x = np.random.normal(self.mean_x, self.std_x, (self.popsize, self.plan_horizon))
-            action_sample_y = np.random.normal(self.mean_y, self.std_y, (self.popsize, self.plan_horizon))
+            action_sample_x = np.random.normal(self.mean_x, self.std_x, (self.popsize * self.num_particles, self.plan_horizon))
+            action_sample_y = np.random.normal(self.mean_y, self.std_y, (self.popsize * self.num_particles, self.plan_horizon))
             self.goal = state[-2:]
             state_without_goal = copy.deepcopy(state)
             state_without_goal = state_without_goal[:-2]
-            states = np.tile(state_without_goal, (self.popsize, 1))
+            states = np.tile(state_without_goal, (num_particles * self.self.popsize, 1))
             num_state = states.shape[0]
             cost = np.zeros(num_state)
+                     
             for t in range(self.plan_horizon):
                 actions = np.column_stack((action_sample_x[:, t], action_sample_y[:, t]))
                 next_states = self.predict_next_state(states, actions) # popsize * plan_horizon
@@ -192,12 +193,16 @@ class MPC:
                     cost[j] += self.obs_cost_fn(next_states[j, :])
                 states = next_states
             
+            cost_particles = []
+            for i in range(self.popsize):
+                cost_particles.append(np.mean(cost[j * self.num_particles : (j + 1) * self.num_particles])
+            
             if self.use_random_optimizer:
-                top_index = np.argsort(cost)[0]
+                top_index = np.argsort(cost_particles)[0]
                 self.mean_x = action_sample_x[top_index, :]
                 self.mean_y = action_sample_y[top_index, :]
             else:
-                top_index = np.argsort(cost)[:self.num_elites]
+                top_index = np.argsort(cost_particles)[:self.num_elites]
                 top_action_x = action_sample_x[top_index, :]
                 top_action_y = action_sample_y[top_index, :]
                 self.mean_x = np.mean(top_action_x, axis=0)
