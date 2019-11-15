@@ -82,7 +82,7 @@ class MPC:
     def predict_next_state_model(self, states, actions):
         """ Given a list of state action pairs, use the learned model to predict the next state"""
         # TODO: write your code here
-         new_states = np.zeros_like(states)
+        new_states = np.zeros_like(states)
         for i in range(states.shape[0]):
             inputs = np.column_stack((states[i,:], actions[i,:]))
             out_means, out_logvars = self.sess.run([self.model.predict_means, self.model.logvars], feed_dict={self.model.inputs: inputs})
@@ -179,12 +179,15 @@ class MPC:
 
         iters = self.max_iters if not self.use_random_optimizer else 1
         for i in range(iters):
-            action_sample_x = np.random.normal(self.mean_x, self.std_x, (self.popsize * self.num_particles, self.plan_horizon))
-            action_sample_y = np.random.normal(self.mean_y, self.std_y, (self.popsize * self.num_particles, self.plan_horizon))
+            action_sample_x = np.random.normal(self.mean_x, self.std_x, (self.popsize, self.plan_horizon))
+            action_sample_x = np.repeat(action_sample_x, self.num_particles, axis=0)
+            action_sample_y = np.random.normal(self.mean_y, self.std_y, (self.popsize, self.plan_horizon))
+            action_sample_y = np.repeat(action_sample_y, self.num_particles, axis=0)
+
             self.goal = state[-2:]
             state_without_goal = copy.deepcopy(state)
             state_without_goal = state_without_goal[:-2]
-            states = np.tile(state_without_goal, (num_particles * self.self.popsize, 1))
+            states = np.tile(state_without_goal, (self.num_particles * self.popsize, 1))
             num_state = states.shape[0]
             cost = np.zeros(num_state)
                      
@@ -197,7 +200,7 @@ class MPC:
             
             cost_particles = []
             for i in range(self.popsize):
-                cost_particles.append(np.mean(cost[j * self.num_particles : (j + 1) * self.num_particles])
+                cost_particles.append(np.mean(cost[i * self.num_particles : (i + 1) * self.num_particles]))
             
             if self.use_random_optimizer:
                 top_index = np.argsort(cost_particles)[0]

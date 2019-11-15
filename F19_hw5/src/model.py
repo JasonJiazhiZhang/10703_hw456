@@ -42,7 +42,7 @@ class PENN:
         # TODO write your code here
         # Create and initialize your model
         for i in range(self.num_nets):
-            model, self.I = create_network()
+            model, self.I = self.create_network()
             self.models.append(model)
             out_mean, out_logvar = self.get_output(model.output)
             self.predict_means.append(out_mean)
@@ -53,7 +53,7 @@ class PENN:
             self.rmses.append(rmse)
             
             gradients = tf.gradients(loss, model.trainable_weights)
-            optimizer = tf.train.AdamOptimizer(self.learning_rate).apply(zip(gradients, model.trainable_weights))
+            optimizer = tf.train.AdamOptimizer(self.learning_rate).apply_gradients(zip(gradients, model.trainable_weights))
             self.optimizers.append(optimizer)
         
         self.sess.run(tf.initialize_all_variables())
@@ -106,8 +106,10 @@ class PENN:
                 self.losses, self.rmses],
                 feed_dict={
                     true_state: targets[i],
-                    self.I, inputs[i]
+                    self.I: inputs[i]
                 }
             )
+            losses.append(loss)
+            rmses.append(rmse)
         return losses, rmses
     # TODO: Write any helper functions that you need
