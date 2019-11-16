@@ -4,6 +4,7 @@ import numpy as np
 import gym
 import copy
 import collections
+import random
 
 class MPC:
     def __init__(self, env, plan_horizon, model, popsize, num_elites, max_iters,
@@ -51,9 +52,9 @@ class MPC:
         self.std_x = 0.5 * np.ones(self.plan_horizon)
         self.std_y = 0.5 * np.ones(self.plan_horizon)
         
-        self.train_states = []
-        self.train_actions = []
-        self.train_next_states = []
+        self.train_states = None
+        self.train_actions = None
+        self.train_next_states = None
 
         # TODO: write your code here
         # Initialize your planner with the relevant arguments.
@@ -84,14 +85,18 @@ class MPC:
         # TODO: write your code here
         new_states = np.zeros_like(states)
         for i in range(states.shape[0]):
-            inputs = np.column_stack((states[i,:], actions[i,:]))
-            out_means, out_logvars = self.sess.run([self.model.predict_means, self.model.logvars], feed_dict={self.model.inputs: inputs})
+            inputs = np.concatenate((states[i,:], actions[i,:]), axis=0)
+            inputs = np.expand_dims(inputs, axis=0)
             index = np.random.randint(self.num_nets)
-            mean = out_means[index]
-            logvar = out_logvars[index]
-            new_state = np.random.normal(mean, np.sqrt(np.exp(logvar)))
+            out_means, out_logvars = self.model.sess.run(
+                [self.model.means[index], self.model.logvars[index]], 
+                feed_dict={self.model.models[index].input: inputs}
+            )
+            # mean = out_means[index]
+            # logvar = out_logvars[index]
+            new_state = np.random.normal(out_means, np.sqrt(np.exp(out_logvars)))
             new_states[i, :] = new_state
-                                                
+               
         return new_states
 
 
@@ -113,37 +118,48 @@ class MPC:
           epochs: number of epochs to train for
         """
         # TODO: write your code here
-        batch_size = 128
+
+        self.train_states = None
+        self.train_actions = None
+        self.train_next_states = None
+
         for i in range(len(obs_trajs)):
-            self.train_states.append(obs_trajs[i][:-1, :-2])
-            self.train_actions.append(acs_trajs[i])
-            self.train_next_states.append(obs_trajs[i][1:, :-2])
-        
-        train_inputs = []
-        train_targets = []
-        for i in range(self.num_nets):
-            index = np.random.permutation(len(self.train_states))
-            states = self.train_states[index,:]
-            actions = self.train_actions[index,:]
-            targets = self.train_next_states[index,:]
-            inputs = np.column_stack((states, actions))
-            train_inputs.append(inputs)
-            train_targets.append(targets)
-        losses = []
-        rmses = []
-        for i in epochs:
-            index = np.random.permutation(len(self.train_states))
-            for batch_id in range(0, len(self.train_states), batch_size):
-                batch_index = index[batch_id * batch_size: min((batch_id + 1) * batch_size, len(self.train_states))]
-                model_inputs = []
-                model_targets = []
-                for inputs, targets in zip(train_inputs, train_targets):
-                    model_inputs.append(inputs[batch_index, :])
-                    model_targets.append(targets[batch_index, :])
-                loss, rmse = self.model.train(model_inputs, model_targets)
-                losses.append(np.mean(loss))
-                rmses.append(np.mean(rmse))
-        print('Loss: {}, RMSE: {}'.format(np.mean(losses), np.mean(rmses)))
+            if self.train_states is not None:
+                self.train_states = np.append(self.train_states, obs_trajs[i][:-1, :-2], axis=0)
+            else:
+                self.train_states = np.copy(obs_trajs[i][:-1, :-2])
+
+            if self.train_actions is not None:
+                self.train_actions = np.append(self.train_actions, acs_trajs[i], axis=0)
+            else:
+                self.train_actions = np.copy(acs_trajs[i])
+
+            if self.train_next_states is not None:
+                self.train_next_states = np.append(self.train_next_states, obs_trajs[i][1:, :-2], axis=0)
+            else:
+                self.train_next_states = np.copy(obs_trajs[i][1:, :-2])
+
+        # print(self.train_states.shape)
+        # print(self.train_actions.shape)
+        # print(self.train_next_states.shape)
+
+        train_inputs = np.column_stack((self.train_states, self.train_actions))
+        train_targets = np.copy(self.train_next_states)
+
+        train_loss, train_rmse = self.model.train(train_inputs, train_targets, epochs=epochs)
+
+        # for i in range(epochs):
+        #     index = np.random.permutation(len(self.train_states))
+        #     for batch_id in range(0, len(self.train_states), batch_size):
+        #         batch_index = index[batch_id * batch_size: min((batch_id + 1) * batch_size, len(self.train_states))]
+        #         model_inputs = []
+        #         model_targets = []
+        #         for inputs, targets in zip(train_inputs, train_targets):
+        #             model_inputs.append(np.take(inputs, batch_index))
+        #             model_targets.append(np.take(targets, batch_index))
+        #         loss, rmse = self.model.train(model_inputs, model_targets)
+        #         losses.append(np.mean(loss))
+        #         rmses.append(np.mean(rmse))
 
                 
     def reset_std(self):

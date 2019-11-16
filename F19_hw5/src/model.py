@@ -1,8 +1,9 @@
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
 from keras.layers import Dense, Flatten, Input, Concatenate, Lambda, Activation
 from keras.models import Model
 from keras.regularizers import l2
-import keras.backend as K
+import tensorflow.compat.v1.keras.backend as K
 import numpy as np
 from util import ZFilter
 
@@ -28,10 +29,13 @@ class PENN:
         self.state_dim = state_dim
         self.action_dim = action_dim
         K.set_session(self.sess)
+
         self.learning_rate = learning_rate
         self.models = []
+        self.inputs_placeholder = []
+        self.targets_placeholder = []
         self.optimizers = []
-        self.predict_means = []
+        self.means = []
         self.logvars = []
         self.losses = []
         self.rmses = []
@@ -42,17 +46,19 @@ class PENN:
         # TODO write your code here
         # Create and initialize your model
         for i in range(self.num_nets):
-            model, self.I = self.create_network()
+            model= self.create_network()
             self.models.append(model)
-            out_mean, out_logvar = self.get_output(model.output)
-            self.predict_means.append(out_mean)
+
+            out_mean, out_logvar = self.get_output(self.models[i].output)
+            self.means.append(out_mean)
             self.logvars.append(out_logvar)
-            true_state = tf.placeholder(tf.float32, shape=[None, self.state_dim])
-            loss, rmse = self.compile_loss(true_state, out_mean, out_logvar)
+
+            self.targets_placeholder.append(tf.placeholder(tf.float32, shape=[None, self.state_dim]))
+            loss, rmse = self.compile_loss(self.targets_placeholder[i], self.means[i], self.logvars[i])
             self.losses.append(loss)
             self.rmses.append(rmse)
             
-            gradients = tf.gradients(loss, model.trainable_weights)
+            gradients = tf.gradients(self.losses[i], model.trainable_weights)
             optimizer = tf.train.AdamOptimizer(self.learning_rate).apply_gradients(zip(gradients, model.trainable_weights))
             self.optimizers.append(optimizer)
         
@@ -81,14 +87,13 @@ class PENN:
         h3 = Dense(HIDDEN3_UNITS, activation='relu', kernel_regularizer=l2(0.0001))(h2)
         O = Dense(2 * self.state_dim, activation='linear', kernel_regularizer=l2(0.0001))(h3)
         model = Model(input=I, output=O)
-        return model, I 
+        return model 
 
-    def compile_loss(self, true_state, out_mean, out_logvar):
+    def compile_loss(self, target_state, out_mean, out_logvar):
         inv_var = tf.exp(-out_logvar)
-        diff = out_mean - true_state
-        mse_loss = tf.reduce_mean(tf.reduce_mean(tf.square(diff) * inv_var, axis=-1), axis=-1)
-        var_loss = tf.reduce_mean(tf.reduce_mean(out_logvar, axis=-1), axis=-1)
-        rmse = tf.sqrt(tf.reduce_mean(tf.square(diff)))
+        mse_loss = tf.reduce_mean(tf.reduce_sum(tf.square(out_mean - target_state) * inv_var, axis=-1), axis=-1)
+        var_loss = tf.reduce_mean(tf.reduce_sum(out_logvar, axis=-1), axis=-1)
+        rmse = tf.sqrt(tf.reduce_mean(tf.square(out_mean - target_state)))
         return mse_loss + var_loss, rmse
         
     def train(self, inputs, targets, batch_size=128, epochs=5):
@@ -98,18 +103,54 @@ class PENN:
           targets: resulting states
         """
         # TODO: write your code here
-        losses = []
-        rmses = []
-        for i in range(self.num_nets):
-            _, loss, rmse = self.sess.run(
-                [self.optimizers[i],
-                self.losses, self.rmses],
-                feed_dict={
-                    true_state: targets[i],
-                    self.I: inputs[i]
-                }
-            )
-            losses.append(loss)
-            rmses.append(rmse)
-        return losses, rmses
+        # losses = []
+        # rmses = []
+        # print(len(inputs))
+        # #print(targets)
+        # for i in range(self.num_nets):
+        #     _, loss, rmse = self.sess.run(
+        #         [self.optimizers[i],
+        #          self.losses, self.rmses],
+        #         feed_dict={
+        #             self.true_state: targets[i],
+        #             self.I: inputs[i]
+        #         }
+        #     )
+        #     losses.append(loss)
+        #     rmses.append(rmse)
+        # return losses, rmses
+
+        losses = [[]] * self.num_nets
+        rmses = [[]] * self.num_nets
+
+        for e in range(epochs):
+            for i in range(self.num_nets):
+                index = np.random.choice(len(inputs), size=len(inputs), replace=True)
+                batch_losses = []
+                batch_rmses = []
+                counter = 0
+                for batch_id in range(0, len(inputs), batch_size):
+                    batch_index = index[batch_id : min(batch_id + batch_size, len(inputs))]
+                    batch_inputs = inputs[batch_index]
+                    batch_targets = targets[batch_index]
+
+                    _, loss, rmse, mean, logvar = self.sess.run(
+                        [self.optimizers[i], self.losses[i], self.rmses[i], self.means[i], self.logvars[i]],
+                        feed_dict = {self.models[i].input: batch_inputs, self.targets_placeholder[i]: batch_targets}
+                    )
+                    # print("mean", mean)
+                    # print("logvar", logvar)
+                    # print("loss", loss)
+                    # print("rmse", rmse)
+                    batch_losses.append(loss)
+                    batch_rmses.append(rmse)
+
+                losses[i].append(np.mean(batch_losses))
+                rmses[i].append(np.mean(batch_rmses))
+
+                print("epoch {}, loss {}, rmse {}".format(e, losses[i][-1], rmses[i][-1]))
+
+        return np.array(losses), np.array(rmses)
+
+
     # TODO: Write any helper functions that you need

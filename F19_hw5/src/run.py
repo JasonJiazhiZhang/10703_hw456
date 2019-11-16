@@ -132,6 +132,11 @@ def test_cem_gt_dynamics(num_episode=10):
     exp = ExperimentGTDynamics(env_name='Pushing2D-v1', mpc_params=mpc_params)
     avg_reward, avg_success = exp.test(num_episode)
     print('CEM PushingEnv: avg_reward: {}, avg_success: {}'.format(avg_reward, avg_success))
+
+    mpc_params = {'use_mpc': True, 'num_particles': 1}
+    exp = ExperimentGTDynamics(env_name='Pushing2D-v1', mpc_params=mpc_params)
+    avg_reward, avg_success = exp.test(num_episode)
+    print('CEM PushingEnv: avg_reward: {}, avg_success: {}'.format(avg_reward, avg_success))
     
 #     mpc_params = {'use_mpc': False, 'num_particles': 1}
 #     exp = ExperimentGTDynamics(env_name='Pushing2D-v1', mpc_params=mpc_params)
@@ -173,7 +178,8 @@ def train_single_dynamics(num_test_episode=50):
     exp = ExperimentModelDynamics(env_name='Pushing2D-v1', num_nets=num_nets, mpc_params=mpc_params)
     exp.model_warmup(num_episodes=num_episodes, num_epochs=num_epochs)
 
-    avg_reward, avg_success = exp.test(num_test_episode, optimizer='cem')
+    avg_reward, avg_success = exp.test(num_test_episode, optimizer='random')
+    print('MPC PushingEnv: avg_reward: {}, avg_success: {}'.format(avg_reward, avg_success))
 
 
 def train_pets():
