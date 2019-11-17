@@ -11,7 +11,6 @@ HIDDEN1_UNITS = 400
 HIDDEN2_UNITS = 400
 HIDDEN3_UNITS = 400
 
-
 class PENN:
     """
     (P)robabilistic (E)nsemble of (N)eural (N)etworks
@@ -92,10 +91,11 @@ class PENN:
 
     def compile_loss(self, target_state, out_mean, out_logvar):
         inv_var = tf.exp(-out_logvar)
-        mse_loss = tf.reduce_mean(tf.reduce_sum(tf.square(out_mean - target_state) * inv_var, axis=-1), axis=-1)
-        var_loss = tf.reduce_mean(tf.reduce_sum(out_logvar, axis=-1), axis=-1)
-        rmse = tf.sqrt(tf.reduce_sum(tf.square(out_mean - target_state)))
-        return mse_loss + var_loss, rmse
+        mean_loss = tf.reduce_mean(tf.reduce_sum(tf.square(out_mean - target_state) * inv_var, axis=-1))
+        var_loss = tf.reduce_mean(tf.reduce_sum(out_logvar, axis=-1))
+        rmse = tf.sqrt(tf.reduce_sum(tf.reduce_mean(tf.square(out_mean - target_state), axis=0)))
+        #rmse = tf.sqrt(tf.reduce_sum(tf.square(out_mean - target_state)))
+        return mean_loss + var_loss, rmse
         
     def train(self, inputs, targets, batch_size=128, epochs=5):
         """
