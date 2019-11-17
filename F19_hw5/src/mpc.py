@@ -80,33 +80,60 @@ class MPC:
         # the -0.4 is to adjust for the radius of the box and pusher
         return W_PUSHER * np.max(d_box - 0.4, 0) + W_GOAL * d_goal + W_DIFF * diff_coord
 
+    def obs_cost_fn_batch(self, states):
+        W_PUSHER = 1
+        W_GOAL = 2
+        W_DIFF = 5  
+
+        pusher_x, pusher_y = states[:, 0], states[:, 1]
+        box_x, box_y = states[:, 2], states[:, 3]
+        goal_x, goal_y = self.goal[0], self.goal[1]
+
+        pusher_box = np.array([box_x - pusher_x, box_y - pusher_y])
+        box_goal = np.array([goal_x - box_x, goal_y - box_y])
+        d_box = np.sqrt(np.dot(pusher_box, pusher_box.T))
+        d_goal = np.sqrt(np.dot(box_goal, box_goal.T))
+        diff_coord = np.abs(box_x / box_y - goal_x / goal_y)
+        # the -0.4 is to adjust for the radius of the box and pusher
+        return W_PUSHER * np.max(d_box - 0.4, 0) + W_GOAL * d_goal + W_DIFF * diff_coord
+
+
     def predict_next_state_model(self, states, actions):
         """ Given a list of state action pairs, use the learned model to predict the next state"""
         # TODO: write your code here
-        new_states = np.zeros_like(states)
-        for i in range(states.shape[0]):
-            inputs = np.concatenate((states[i,:], actions[i,:]), axis=0)
-            inputs = np.expand_dims(inputs, axis=0)
-            index = np.random.randint(self.num_nets)
-            out_means, out_logvars = self.model.sess.run(
-                [self.model.means[index], self.model.logvars[index]], 
-                feed_dict={self.model.models[index].input: inputs}
-            )
-            # mean = out_means[index]
-            # logvar = out_logvars[index]
-            new_state = np.random.normal(out_means, np.sqrt(np.exp(out_logvars)))
-            new_states[i, :] = new_state
-               
-        return new_states
+        # new_states = np.zeros_like(states)
+        # for i in range(states.shape[0]):
+        #     inputs = np.concatenate((states[i,:], actions[i,:]), axis=0)
+        #     inputs = np.expand_dims(inputs, axis=0)
+        #     index = np.random.randint(self.num_nets)
+        #     out_means, out_logvars = self.model.sess.run(
+        #         [self.model.means[index], self.model.logvars[index]], 
+        #         feed_dict={self.model.models[index].input: inputs}
+        #     )
+        #     # mean = out_means[index]
+        #     # logvar = out_logvars[index]
+        #     new_state = np.random.normal(out_means, np.sqrt(np.exp(out_logvars)))
+        #     new_states[i, :] = new_state
+
+        # return new_states
+
+        inputs = np.concatenate((states, actions), axis=1)
+        index = np.random.randint(self.num_nets)
+        out_means, out_logvars = self.model.sess.run(
+            [self.model.means[index], self.model.logvars[index]],
+            feed_dict = {self.model.models[index].input: inputs}
+        )
+        return np.random.normal(out_means, np.sqrt(np.exp(out_logvars)))
 
 
     def predict_next_state_gt(self, states, actions):
         """ Given a list of state action pairs, use the ground truth dynamics to predict the next state"""
         # TODO: write your code here
-        new_states = np.zeros_like(states)
-        for i in range(states.shape[0]):
-            new_states[i, :] = self.env.get_nxt_state(states[i,:], actions[i,:])
-        return new_states
+        # new_states = np.zeros_like(states)
+        # for i in range(states.shape[0]):
+        #     new_states[i, :] = self.env.get_nxt_state(states[i,:], actions[i,:])
+        # return new_states
+        return self.env.get_nxt_state(states, actions)
 
     def train(self, obs_trajs, acs_trajs, rews_trajs, epochs=5):
         """
@@ -196,27 +223,31 @@ class MPC:
         iters = self.max_iters if not self.use_random_optimizer else 1
         for i in range(iters):
             action_sample_x = np.random.normal(self.mean_x, self.std_x, (self.popsize, self.plan_horizon))
-            action_sample_x = np.repeat(action_sample_x, self.num_particles, axis=0)
+            action_sample_x_particle = np.repeat(action_sample_x, self.num_particles, axis=0)
             action_sample_y = np.random.normal(self.mean_y, self.std_y, (self.popsize, self.plan_horizon))
-            action_sample_y = np.repeat(action_sample_y, self.num_particles, axis=0)
+            action_sample_y_particle = np.repeat(action_sample_y, self.num_particles, axis=0)
 
             self.goal = state[-2:]
             state_without_goal = copy.deepcopy(state)
             state_without_goal = state_without_goal[:-2]
             states = np.tile(state_without_goal, (self.num_particles * self.popsize, 1))
+ 
             num_state = states.shape[0]
             cost = np.zeros(num_state)
                      
             for t in range(self.plan_horizon):
-                actions = np.column_stack((action_sample_x[:, t], action_sample_y[:, t]))
-                next_states = self.predict_next_state(states, actions) # popsize * plan_horizon
+                actions = np.column_stack((action_sample_x_particle[:, t], action_sample_y_particle[:, t]))
+                next_states = self.predict_next_state(states, actions) # [popsize*num_particles, plan_horizon]
                 for j in range(num_state):
                     cost[j] += self.obs_cost_fn(next_states[j, :])
+                #cost += self.obs_cost_fn_batch(next_states)
                 states = next_states
             
-            cost_particles = []
-            for i in range(self.popsize):
-                cost_particles.append(np.mean(cost[i * self.num_particles : (i + 1) * self.num_particles]))
+            cost = np.reshape(cost, (self.popsize, self.num_particles))
+            # cost_particles = []
+            # for i in range(self.popsize):
+            #     cost_particles.append(np.mean(cost[i * self.num_particles : (i + 1) * self.num_particles]))
+            cost_particles = np.mean(cost, axis=1)
             
             if self.use_random_optimizer:
                 top_index = np.argsort(cost_particles)[0]

@@ -79,6 +79,8 @@ class ExperimentModelDynamics:
                     self.task_horizon, self.cem_policy if optimizer == 'cem' else self.random_policy
                 )
             )
+            print('CEM PushingEnv: reward_sum: {}'.format(samples[-1]["reward_sum"]))
+
         avg_return = np.mean([sample["reward_sum"] for sample in samples])
         avg_success = np.mean([sample["rewards"][-1] == 0 for sample in samples])
         return avg_return, avg_success
@@ -178,7 +180,7 @@ def train_single_dynamics(num_test_episode=50):
     exp = ExperimentModelDynamics(env_name='Pushing2D-v1', num_nets=num_nets, mpc_params=mpc_params)
     exp.model_warmup(num_episodes=num_episodes, num_epochs=num_epochs)
 
-    avg_reward, avg_success = exp.test(num_test_episode, optimizer='random')
+    avg_reward, avg_success = exp.test(num_test_episode, optimizer='cem')
     print('MPC PushingEnv: avg_reward: {}, avg_success: {}'.format(avg_reward, avg_success))
 
 

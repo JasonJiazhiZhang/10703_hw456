@@ -58,8 +58,9 @@ class PENN:
             self.losses.append(loss)
             self.rmses.append(rmse)
             
-            gradients = tf.gradients(self.losses[i], model.trainable_weights)
-            optimizer = tf.train.AdamOptimizer(self.learning_rate).apply_gradients(zip(gradients, model.trainable_weights))
+            # gradients = tf.gradients(self.losses[i], self.model[i].trainable_weights)
+            # optimizer = tf.train.AdamOptimizer(self.learning_rate).apply_gradients(zip(gradients, self.model[i].trainable_weights))
+            optimizer = tf.train.AdamOptimizer(self.learning_rate).minimize(self.losses[i])
             self.optimizers.append(optimizer)
         
         self.sess.run(tf.initialize_all_variables())
@@ -93,7 +94,7 @@ class PENN:
         inv_var = tf.exp(-out_logvar)
         mse_loss = tf.reduce_mean(tf.reduce_sum(tf.square(out_mean - target_state) * inv_var, axis=-1), axis=-1)
         var_loss = tf.reduce_mean(tf.reduce_sum(out_logvar, axis=-1), axis=-1)
-        rmse = tf.sqrt(tf.reduce_mean(tf.square(out_mean - target_state)))
+        rmse = tf.sqrt(tf.reduce_sum(tf.square(out_mean - target_state)))
         return mse_loss + var_loss, rmse
         
     def train(self, inputs, targets, batch_size=128, epochs=5):
