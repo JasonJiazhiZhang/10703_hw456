@@ -193,9 +193,6 @@ class MPC:
         """
         # TODO: write your code here
 
-        self.train_states = None
-        self.train_actions = None
-        self.train_next_states = None
 
         # for i in range(len(obs_trajs)):
         #     if self.train_states is not None:
@@ -227,23 +224,23 @@ class MPC:
             if self.train_states is not None:
                 self.train_states = np.append(self.train_states, obs_traj[:-1, :-2], axis=0)
             else:
-                self.train_states = np.copy(obs_traj[:-1, :-2])
+                self.train_states = copy.deepcopy(obs_traj[:-1, :-2])
 
             if self.train_actions is not None:
                 self.train_actions = np.append(self.train_actions, acs_traj, axis=0)
             else:
-                self.train_actions = np.copy(acs_traj)
+                self.train_actions = copy.deepcopy(acs_traj)
 
             if self.train_next_states is not None:
                 self.train_next_states = np.append(self.train_next_states, obs_traj[1:, :-2], axis=0)
             else:
-                self.train_next_states = np.copy(obs_traj[1:, :-2])            
+                self.train_next_states = copy.deepcopy(obs_traj[1:, :-2])            
 
         train_inputs = np.column_stack((self.train_states, self.train_actions))
-        train_targets = np.copy(self.train_next_states)
+        train_targets = copy.deepcopy(self.train_next_states)
 
         train_loss, train_rmse = self.model.train(train_inputs, train_targets, epochs=epochs)
-
+        return np.mean(train_loss), np.mean(train_rmse)
         # for i in range(epochs):
         #     index = np.random.permutation(len(self.train_states))
         #     for batch_id in range(0, len(self.train_states), batch_size):

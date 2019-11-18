@@ -101,7 +101,10 @@ class ExperimentModelDynamics:
 
     def train(self, num_train_epochs, num_episodes_per_epoch, evaluation_interval):
         """ Jointly training the model and the policy """
-
+        losses = []
+        rmses = []
+        test_rate_cem = []
+        test_rate_random = []
         for i in range(num_train_epochs):
             print("####################################################################")
             print("Starting training epoch %d." % (i + 1))
@@ -115,18 +118,25 @@ class ExperimentModelDynamics:
                 )
             print("Rewards obtained:", [sample["reward_sum"] for sample in samples])
 
-            self.cem_policy.train(
+            loss, rmse = self.cem_policy.train(
                 [sample["obs"] for sample in samples],
                 [sample["ac"] for sample in samples],
                 [sample["rewards"] for sample in samples],
                 epochs=5
             )
+            losses.append(loss)
+            rmses.append(rmse)
 
             if (i + 1) % evaluation_interval == 0:
                 avg_return, avg_success = self.test(50, optimizer='cem')
+                test_rate_cem.append(avg_success)
                 print('Test success CEM + MPC:', avg_success)
-                avg_return, avg_success = self.test(50, optimizer='random')
-                print('Test success Random + MPC:', avg_success)
+                avg_return, avg_success = self.test(20, optimizer='random')
+                test_rate_random.append(avg_success)
+                print('Test success Random + MPC:', savg_success)
+        return losses, rmses, test_rate_cem, test_rate_random
+        
+        
 
 
 def test_cem_gt_dynamics(num_episode=10):
@@ -187,16 +197,21 @@ def train_single_dynamics(num_test_episode=50):
 def train_pets():
     num_nets = 2
     
-    num_epochs = 500
+    num_epochs = 50
     evaluation_interval = 50
     num_episodes_per_epoch = 1
 
     mpc_params = {'use_mpc': True, 'num_particles': 6}
     exp = ExperimentModelDynamics(env_name='Pushing2D-v1', num_nets=num_nets, mpc_params=mpc_params)
     exp.model_warmup(num_episodes=100, num_epochs=10)
-    exp.train(num_train_epochs=num_epochs,
+    losses, rmses, test_rate_cem, test_rate_random = exp.train(num_train_epochs=num_epochs,
               num_episodes_per_epoch=num_episodes_per_epoch,
               evaluation_interval=evaluation_interval)
+    prefix = 'pets'
+    np.save(prefix + '_loss.npy', np.array(losses))
+    np.save(prefix + '_rmse.npy', np.array(rmses))
+    np.save(prefix + '_test_cem.npy', np.array(test_rate_cem))
+    np.save(prefix + 'test_rate_random.npy', np.array(test_rate_random))
 
 
 if __name__ == "__main__":
