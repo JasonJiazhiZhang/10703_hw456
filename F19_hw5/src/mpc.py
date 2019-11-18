@@ -7,7 +7,7 @@ import collections
 import random
 
 class Replay_Memory():
-    def __init__(self, memory_size=4000):
+    def __init__(self, memory_size=200):
         # The memory essentially stores transitions recorder from the agent
         # taking actions in the environment.
 
@@ -20,7 +20,7 @@ class Replay_Memory():
         self.memory_size = memory_size
         self.memory = collections.deque(maxlen=memory_size)
 
-    def sample(self, k=1000):
+    def sample(self, k):
         # This function returns a batch of randomly sampled transitions - i.e. state, action, reward, next state, terminal flag tuples.
         # You will feed this to your model to train.
         return random.sample(self.memory, k)
@@ -144,24 +144,43 @@ class MPC:
 
         # return new_states
 
-        # inputs = np.concatenate((states, actions), axis=1)
         inputs = np.column_stack((states, actions))
-        index = np.random.randint(self.num_nets)
-        out_means, out_logvars = self.model.sess.run(
-            [self.model.means[index], self.model.logvars[index]],
-            feed_dict = {self.model.models[index].input: inputs}
-        )
+        index = np.random.randint(self.num_nets, size = states.shape[0])
+        
+        model_index = []
+        for i in range(self.num_nets):
+            model_index.append(np.argwhere(index == i).squeeze())
+        
+        out_means = np.zeros_like(states)
+        out_logvars = np.zeros_like(states)
+        
+        for i in range(self.num_nets):
+            means, logvars = self.model.sess.run(
+                [self.model.means[i], self.model.logvars[i]],
+                feed_dict = {self.model.models[i].input: inputs[model_index[i]]}
+            )
+            out_means[model_index[i]] = means
+            out_logvars[model_index[i]] = logvars
         return np.random.normal(out_means, np.sqrt(np.exp(out_logvars)))
+    
+#         inputs = np.column_stack((states, actions))
+#         index = np.random.randint(self.num_nets)
+#         out_means, out_logvars = self.model.sess.run(
+#             [self.model.means[index], self.model.logvars[index]],
+#             feed_dict = {self.model.models[index].input: inputs}
+#         )
+#         return np.random.normal(out_means, np.sqrt(np.exp(out_logvars)))
+
 
 
     def predict_next_state_gt(self, states, actions):
         """ Given a list of state action pairs, use the ground truth dynamics to predict the next state"""
         # TODO: write your code here
-        # new_states = np.zeros_like(states)
-        # for i in range(states.shape[0]):
-        #     new_states[i, :] = self.env.get_nxt_state(states[i,:], actions[i,:])
-        # return new_states
-        return self.env.get_nxt_state(states, actions)
+        new_states = np.zeros_like(states)
+        for i in range(states.shape[0]):
+            new_states[i, :] = self.env.get_nxt_state(states[i,:], actions[i,:])
+        return new_states
+#         return self.env.get_nxt_state(states, actions)
 
     def train(self, obs_trajs, acs_trajs, rews_trajs, epochs=5):
         """
@@ -195,11 +214,16 @@ class MPC:
         #         self.train_next_states = np.copy(obs_trajs[i][1:, :-2])
 
         for i in range(len(obs_trajs)):
-            self.memory.append([obs_trajs[i], acs_trajs[i]])
+            obs = copy.deepcopy(obs_trajs[i])
+            act = copy.deepcopy(acs_trajs[i])
+            self.memory.append([obs, act])
 
-        sampled_exp = self.memory.sample(len(obs_trajs))    
+        sampled_exp = self.memory.sample(len(obs_trajs))   
+        
 
         for obs_traj, acs_traj in sampled_exp:
+#         for obs_traj, acs_traj in zip(obs_trajs, acs_trajs):
+
             if self.train_states is not None:
                 self.train_states = np.append(self.train_states, obs_traj[:-1, :-2], axis=0)
             else:

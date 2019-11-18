@@ -161,10 +161,10 @@ def test_cem_gt_dynamics(num_episode=10):
 #     avg_reward, avg_success = exp.test(num_episode)
 #     print('MPC PushingEnv Noisy: avg_reward: {}, avg_success: {}'.format(avg_reward, avg_success))
 #     #0.7
-#     mpc_params = {'use_mpc': False, 'num_particles': 1}
-#     exp = ExperimentGTDynamics(env_name='Pushing2D-v1', mpc_params=mpc_params)
-#     avg_reward, avg_success = exp.test(num_episode)
-#     print('MPC PushingEnv Noisy: avg_reward: {}, avg_success: {}'.format(avg_reward, avg_success))
+    mpc_params = {'use_mpc': False, 'num_particles': 1}
+    exp = ExperimentGTDynamics(env_name='Pushing2D-v1', mpc_params=mpc_params)
+    avg_reward, avg_success = exp.test(num_episode)
+    print('MPC PushingEnv Noisy: avg_reward: {}, avg_success: {}'.format(avg_reward, avg_success))
 
     # mpc_params = {'use_mpc': True, 'num_particles': 1}
     # exp = ExperimentGTDynamics(env_name='Pushing2D-v1', mpc_params=mpc_params)
@@ -186,6 +186,7 @@ def train_single_dynamics(num_test_episode=50):
 
 def train_pets():
     num_nets = 2
+    
     num_epochs = 500
     evaluation_interval = 50
     num_episodes_per_epoch = 1
@@ -199,6 +200,6 @@ def train_pets():
 
 
 if __name__ == "__main__":
-#    test_cem_gt_dynamics(50)
-    train_single_dynamics(50)
-#    train_pets()
+#     test_cem_gt_dynamics(50) 
+#     train_single_dynamics(50)
+    train_pets()
