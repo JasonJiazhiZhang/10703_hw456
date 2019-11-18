@@ -92,12 +92,14 @@ class ExperimentModelDynamics:
         for i in range(num_episodes):
             samples.append(self.agent.sample(self.task_horizon, self.random_policy_no_mpc))
 
-        self.cem_policy.train(
+        loss, rmse = self.cem_policy.train(
             [sample["obs"] for sample in samples],
             [sample["ac"] for sample in samples],
             [sample["rewards"] for sample in samples],
             epochs=num_epochs
         )
+        return loss, rmse
+        
 
     def train(self, num_train_epochs, num_episodes_per_epoch, evaluation_interval):
         """ Jointly training the model and the policy """
@@ -124,8 +126,8 @@ class ExperimentModelDynamics:
                 [sample["rewards"] for sample in samples],
                 epochs=5
             )
-            losses.append(loss)
-            rmses.append(rmse)
+            losses.append(np.mean(loss))
+            rmses.append(np.mean(rmse))
 
             if (i + 1) % evaluation_interval == 0:
                 avg_return, avg_success = self.test(50, optimizer='cem')
@@ -188,8 +190,10 @@ def train_single_dynamics(num_test_episode=50):
     num_epochs = 100
     mpc_params = {'use_mpc': True, 'num_particles': 6}
     exp = ExperimentModelDynamics(env_name='Pushing2D-v1', num_nets=num_nets, mpc_params=mpc_params)
-    exp.model_warmup(num_episodes=num_episodes, num_epochs=num_epochs)
-
+    loss, rmse = exp.model_warmup(num_episodes=num_episodes, num_epochs=num_epochs)
+    prefix = "single"
+    np.save(prefix + '_loss.npy', np.array(loss))
+    np.save(prefix + '_rmse.npy', np.array(rmse))
     avg_reward, avg_success = exp.test(num_test_episode, optimizer='cem')
     print('MPC PushingEnv: avg_reward: {}, avg_success: {}'.format(avg_reward, avg_success))
 
@@ -215,6 +219,6 @@ def train_pets():
 
 
 if __name__ == "__main__":
-#     test_cem_gt_dynamics(50) 
-#     train_single_dynamics(50)
-    train_pets()
+#    test_cem_gt_dynamics(50) 
+     train_single_dynamics(50)
+ #   train_pets()

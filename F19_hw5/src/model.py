@@ -121,9 +121,9 @@ class PENN:
         #     rmses.append(rmse)
         # return losses, rmses
 
-        losses = [[]] * self.num_nets
-        rmses = [[]] * self.num_nets
-
+        losses = [[] for i in range(self.num_nets)]
+        rmses = [[] for i in range(self.num_nets)] 
+		
         for e in range(epochs):
             for i in range(self.num_nets):
                 index = np.random.choice(len(inputs), size=len(inputs), replace=True)
@@ -150,7 +150,6 @@ class PENN:
                 rmses[i].append(np.mean(batch_rmses))
 
                 print("epoch {}, loss {}, rmse {}".format(e, losses[i][-1], rmses[i][-1]))
-
         return np.array(losses), np.array(rmses)
 
 

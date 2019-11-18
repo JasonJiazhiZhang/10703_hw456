@@ -7,7 +7,7 @@ import collections
 import random
 
 class Replay_Memory():
-    def __init__(self, memory_size=200):
+    def __init__(self, memory_size=2000):
         # The memory essentially stores transitions recorder from the agent
         # taking actions in the environment.
 
@@ -240,7 +240,7 @@ class MPC:
         train_targets = copy.deepcopy(self.train_next_states)
 
         train_loss, train_rmse = self.model.train(train_inputs, train_targets, epochs=epochs)
-        return np.mean(train_loss), np.mean(train_rmse)
+        return train_loss, train_rmse
         # for i in range(epochs):
         #     index = np.random.permutation(len(self.train_states))
         #     for batch_id in range(0, len(self.train_states), batch_size):
